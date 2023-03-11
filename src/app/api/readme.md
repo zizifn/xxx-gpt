@@ -1,0 +1,1 @@
+https://beta.nextjs.org/docs/routing/route-handlers

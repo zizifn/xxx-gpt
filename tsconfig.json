@@ -19,6 +19,7 @@
         "name": "next"
       }
     ],
+    "types": ["@edge-runtime/types"],
     "paths": {
       "@/*": ["./src/*"]
     }
