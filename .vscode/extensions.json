@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "GitHub.copilot",
+        "GitHub.vscode-pull-request-github",
+        "eamodio.gitlens",
+        "bradlc.vscode-tailwindcss",
+    ]
+}

@@ -1,6 +1,6 @@
 POST http://127.0.0.1:3000/api/v1/chat/completions HTTP/1.1
 Content-Type: application/json
-Authorization: Basic
+Authorization: Basic NzhmOTI5YzMtZGM0MC00ZTg4LWFlNjktNWJhNDI3NjFjMTJhOg==
 
 {
   "model": "gpt-3.5-turbo",

@@ -21,9 +21,11 @@ export async function POST(request: NextRequest, { params }: {
   // console.log(openaiUrl);
   let openaiRequest = new NextRequest(new URL(openaiUrl), request);
   Array.from(openaiRequest.headers.keys()).forEach(key => {
-    openaiRequest.headers.delete(key);
+    if(key !== 'content-type'){
+      openaiRequest.headers.delete(key);
+    }
   })
-  openaiRequest.headers.set('Content-Type', "application/json");
+  // openaiRequest.headers.set('Content-Type', "application/json");
   openaiRequest.headers.set('authorization', `Bearer ${apiKey}`);  
   return fetch(openaiRequest);
 }
