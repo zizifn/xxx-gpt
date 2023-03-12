@@ -26,7 +26,7 @@ const isGeneratePicture = (prompt: string) => {
 const categoryPicture = (prompt: string) => {
   return `If sentences like "could you generate art picture" will fall into the category "Image".
 If sentences like "could you generate a poem" will fall into the category "Poem".
-What sentences like "${prompt}" should fall into? Please only choose one of "Image","Poem","others" in JSON format like {"category":""}.`;
+What sentences like "${prompt}" should fall into? Please only choose one of "Image","Poem","others" in JSON format like {"category":""} without other words.`;
 };
 
 type ChatMessage = {
