@@ -1,6 +1,6 @@
 "use client";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { FormEvent, useRef } from "react";
+import { FormEvent, useEffect, useRef } from "react";
 import { Fragment, useState } from "react";
 import {
   FaceSmileIcon as FaceSmileIconOutline,
@@ -17,7 +17,7 @@ import {
   StopIcon,
   XCircleIcon,
   PencilSquareIcon,
-  NoSymbolIcon
+  NoSymbolIcon,
 } from "@heroicons/react/20/solid";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import ReactMarkdown from "react-markdown";
@@ -60,9 +60,12 @@ export function Chats() {
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 45
+    estimateSize: () => 45,
   });
-  virtualizer.scrollToIndex(count - 1);
+  useEffect(()=>{
+    virtualizer.scrollToIndex(count - 1);
+  }, [chatMessages])
+  
   const items = virtualizer.getVirtualItems();
   return (
     <div className="flex w-4/5 min-w-fit flex-grow flex-col">
@@ -247,7 +250,7 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
           {
             role: "assistant",
             content: "exit custom mode, return to chat mode",
-              mode: 'exit'
+            mode: "exit",
           },
         ];
         return [...messages];
@@ -293,13 +296,13 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
             {
               role: "user",
               content: chatText,
-              mode:'image'
+              mode: "image",
             },
             {
               role: "assistant",
               content:
                 "switch to image mode, you can now use word to gerneate image",
-                mode:'image'
+              mode: "image",
             },
           ];
           return [...messages];
@@ -317,7 +320,7 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
         {
           role: "user",
           content: chatText,
-          mode: userMode
+          mode: userMode,
         },
       ];
       return [...messages];
@@ -350,35 +353,49 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
             role: "assistant",
             content: responseMessage,
             isUrl: true,
-            mode: 'image'
+            mode: "image",
           },
         ]);
       }
     } else {
-    const chatResp = await fetch("api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: messages.filter(msg => msg.mode === 'chat').map((msg) => ({ role: msg.role, content: msg.content }))
-      }),
-    });
-    if (chatResp.ok) {
-      const chatData = await chatResp.json();
-      setChatText("");
-      console.log(chatData);
-      const responseMessage = chatData.choices[0]?.message;
-      setChatMessages((oldChatMessages) => [
-        ...oldChatMessages,
-        {
-          ...responseMessage,
-          mode: userMode
+      const chatResp = await fetch("api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ]);
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: messages
+            .filter((msg) => msg.mode === "chat")
+            .map((msg) => ({ role: msg.role, content: msg.content })),
+        }),
+      });
+      if (chatResp.ok) {
+        const chatData = await chatResp.json();
+        setChatText("");
+        console.log(chatData);
+        const responseMessage = chatData.choices[0]?.message;
+        setChatMessages((oldChatMessages) => [
+          ...oldChatMessages,
+          {
+            ...responseMessage,
+            mode: userMode,
+          },
+        ]);
+      }
     }
   }
+
+  function onEnterPress(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && e.shiftKey == false) {
+      e.preventDefault();
+      const value = e.currentTarget.value;
+      if(value){
+      console.log("setChatText", chatText, value);
+      sendChat(e)
+      setChatText('');
+      }
+    }
   }
 
   return (
@@ -404,24 +421,30 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
                 className="block w-full resize-none border-0 border-b border-transparent p-0 pb-2 text-gray-900 placeholder:text-gray-400 focus:border-indigo-600 focus:ring-0 sm:text-sm sm:leading-6"
                 placeholder="彦祖请说话..."
                 value={chatText}
+                onKeyDown={onEnterPress}
                 onChange={(e) => {
                   console.log("onChange", e.target.value);
                   setChatText(e.target.value);
                 }}
               />
             </div>
-            <div className="flex justify-between pt-2 flex-wrap">
+            <div className="flex flex-wrap justify-between pt-2">
               <div className="flex items-center space-x-5">
                 <div className="flow-root">
                   <ReacordAduio setAudioText={setChatText}></ReacordAduio>
                 </div>
                 <div className="flow-root">
-                  <EditUserText chatText={chatText} setChatText={setChatText}></EditUserText>
+                  <EditUserText
+                    chatText={chatText}
+                    setChatText={setChatText}
+                  ></EditUserText>
                 </div>
                 <div className="flow-root">
-                <ModerationsText chatText={chatText} setChatText={setChatText}></ModerationsText>
+                  <ModerationsText
+                    chatText={chatText}
+                    setChatText={setChatText}
+                  ></ModerationsText>
                 </div>
-                
               </div>
               <div className="flex-shrink-0">
                 <button
@@ -439,17 +462,15 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
   );
 }
 
-function ModerationsText(
-  {
-    chatText,
-    setChatText
-  }:{chatText: string,
-    setChatText:(text:string)=>void,
-  }
-){
-
-  async function moderationsText(){
-    if(!chatText) return;
+function ModerationsText({
+  chatText,
+  setChatText,
+}: {
+  chatText: string;
+  setChatText: (text: string) => void;
+}) {
+  async function moderationsText() {
+    if (!chatText) return;
     const moderationsResp = await fetch("api/v1/moderations", {
       method: "POST",
       headers: {
@@ -463,39 +484,35 @@ function ModerationsText(
     if (moderationsResp.ok) {
       const moderationsData = await moderationsResp.json();
       const flagged = moderationsData.results[0].flagged;
-      if(flagged){
-       alert("your text is not allowed");
+      if (flagged) {
+        const categories = moderationsData.results[0].categories;
+        const notAllowedCategoregy = Object.keys(categories).find(key=> categories[key] ===true)
+        alert(`your text has ${notAllowedCategoregy}`);
       }
-
     }
   }
 
   return (
     <button
-    type="button"
-    className="-m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500"
-  onClick={moderationsText}
-  >
-    <NoSymbolIcon
-      className="h-6 w-6 text-yellow-500"
-      aria-hidden="true"
-    />
-    <span className="sr-only">moderations</span>
-  </button>
-  )
+      type="button"
+      className="-m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500"
+      onClick={moderationsText}
+    >
+      <NoSymbolIcon className="h-6 w-6 text-yellow-500" aria-hidden="true" />
+      <span className="sr-only">moderations</span>
+    </button>
+  );
 }
 
-function EditUserText(
-  {
-    chatText,
-    setChatText
-  }:{chatText: string,
-    setChatText:(text:string)=>void,
-  }
-){
-
-  async function editText(){
-    if(!chatText) return;
+function EditUserText({
+  chatText,
+  setChatText,
+}: {
+  chatText: string;
+  setChatText: (text: string) => void;
+}) {
+  async function editText() {
+    if (!chatText) return;
     const editsResp = await fetch("api/v1/edits", {
       method: "POST",
       headers: {
@@ -504,9 +521,9 @@ function EditUserText(
       body: JSON.stringify({
         model: "text-davinci-edit-001",
         input: chatText,
-        instruction: 'Fix the spelling mistakes and grammar errors.',
+        instruction: "Fix the spelling mistakes and grammar errors.",
         n: 1,
-        temperature: 0.2
+        temperature: 0.2,
       }),
     });
     if (editsResp.ok) {
@@ -514,23 +531,19 @@ function EditUserText(
       const responseMessage = chatData.choices[0]?.text;
       console.log(chatData);
       setChatText(responseMessage);
-
     }
   }
 
   return (
     <button
-    type="button"
-    className="-m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500"
-  onClick={editText}
-  >
-    <PencilSquareIcon
-      className="h-6 w-6 text-red-500"
-      aria-hidden="true"
-    />
-    <span className="sr-only">Edit</span>
-  </button>
-  )
+      type="button"
+      className="-m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500"
+      onClick={editText}
+    >
+      <PencilSquareIcon className="h-6 w-6 text-red-500" aria-hidden="true" />
+      <span className="sr-only">Edit</span>
+    </button>
+  );
 }
 
 function Footer() {
