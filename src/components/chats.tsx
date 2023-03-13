@@ -241,6 +241,7 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
   async function sendChat(event: FormEvent) {
     if (!chatText) return;
     event.preventDefault();
+    setChatText('');
     let messages: ChatMessage[] = [];
     let userintent = "";
     if (chatText.startsWith("/exit")) {
@@ -393,7 +394,6 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
       if(value){
       console.log("setChatText", chatText, value);
       sendChat(e)
-      setChatText('');
       }
     }
   }
