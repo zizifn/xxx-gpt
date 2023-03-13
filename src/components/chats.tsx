@@ -16,9 +16,12 @@ import {
   MicrophoneIcon,
   StopIcon,
   XCircleIcon,
+  PencilSquareIcon,
+  NoSymbolIcon
 } from "@heroicons/react/20/solid";
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import ReactMarkdown from "react-markdown";
+import { Ma_Shan_Zheng } from "next/font/google";
 
 const isGeneratePicture = (prompt: string) => {
   return `does this sentence ${prompt} mean the user wants to a picture or art? Please only answer YES or NO with json format.`;
@@ -33,12 +36,14 @@ type ChatMessage = {
   role: "assistant" | "user" | "system";
   content: string;
   isUrl?: boolean;
+  mode: UserMode;
 };
-type UserMode = "image" | "chat";
+type UserMode = "image" | "chat" | "exit";
 const chatMessagesAtom = atom<ChatMessage[]>([
   {
     role: "system",
     content: "You are a helpful assistant.",
+    mode: "chat",
   },
 ]);
 const audioURLAtom = atom<string>("");
@@ -49,6 +54,7 @@ function classNames(...classes: string[]) {
 
 export function Chats() {
   const chatMessages = useAtomValue(chatMessagesAtom);
+  const [editImgesIndex, setEditImgesIndex] = useState(-1);
   const parentRef = useRef<HTMLDivElement>(null);
   const count = chatMessages.length;
   const virtualizer = useVirtualizer({
@@ -120,7 +126,7 @@ export function Chats() {
                         viewBox="0 0 41 41"
                         fill="none"
                         xmlns="http://www.w3.org/2000/svg"
-                        stroke-width="1.5"
+                        strokeWidth={1.5}
                         className="h-6 w-6"
                       >
                         <path
@@ -138,7 +144,7 @@ export function Chats() {
                           />
                           <div>
                             <div className="flex h-6 items-center">
-                            <label
+                              <label
                                 htmlFor="comments"
                                 className="font-medium text-gray-900"
                               >
@@ -149,11 +155,12 @@ export function Chats() {
                                 aria-describedby="comments-description"
                                 name="comments"
                                 type="checkbox"
-                                onChange={(e) => {}}
+                                onChange={(e) => {
+                                  setEditImgesIndex(virtualRow.index);
+                                }}
                                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
                               />
                             </div>
-
                           </div>
                         </>
                       ) : (
@@ -169,7 +176,7 @@ export function Chats() {
           </div>
         </div>
       </div>
-      <ChatBox></ChatBox>
+      <ChatBox editImgesIndex={editImgesIndex}></ChatBox>
       <Footer></Footer>
     </div>
   );
@@ -211,7 +218,16 @@ const moods = [
     bgColor: "bg-blue-500",
   },
 ];
-function ChatBox() {
+function base64ImagetoBlob(base64: string) {
+  var binary = atob(base64);
+  var array = [];
+  for (var i = 0; i < binary.length; i++) {
+    array.push(binary.charCodeAt(i));
+  }
+  return new Blob([new Uint8Array(array)], { type: "image/png" });
+}
+
+function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
   const setChatMessages = useSetAtom(chatMessagesAtom);
   const chatMessages = useAtomValue(chatMessagesAtom);
   const [selected, setSelected] = useState(moods[4]);
@@ -223,6 +239,22 @@ function ChatBox() {
     event.preventDefault();
     let messages: ChatMessage[] = [];
     let userintent = "";
+    if (chatText.startsWith("/exit")) {
+      setChatMessages((oldChatMessages: ChatMessage[]) => {
+        messages = [
+          ...oldChatMessages,
+          {
+            role: "assistant",
+            content: "exit custom mode, return to chat mode",
+              mode: 'exit'
+          },
+        ];
+        return [...messages];
+      });
+      setUserMode("chat");
+      setChatText("");
+      return;
+    }
     if (chatText.startsWith("/mode")) {
       const userIntentResp = await fetch("api/v1/chat/completions", {
         method: "POST",
@@ -253,34 +285,38 @@ function ChatBox() {
           intentJSON.choices[0]?.message?.content
         ).category;
       }
+      if (userintent.toLocaleLowerCase() === "image") {
+        setChatMessages((oldChatMessages: ChatMessage[]) => {
+          messages = [
+            ...oldChatMessages,
+            {
+              role: "user",
+              content: chatText,
+              mode:'image'
+            },
+            {
+              role: "assistant",
+              content:
+                "switch to image mode, you can now use word to gerneate image",
+                mode:'image'
+            },
+          ];
+          return [...messages];
+        });
+        console.log("images mode");
+        setUserMode("image");
+        setChatText("");
+        return;
+      }
     }
-    if (userintent.toLocaleLowerCase() === "image") {
-      setChatMessages((oldChatMessages: ChatMessage[]) => {
-        messages = [
-          ...oldChatMessages,
-          {
-            role: "user",
-            content: chatText,
-          },
-          {
-            role: "assistant",
-            content:
-              "switch to image mode, you can now use word to gerneate image",
-          },
-        ];
-        return [...messages];
-      });
-      console.log("images mode");
-      setUserMode("image");
-      setChatText("");
-      return;
-    }
+
     setChatMessages((oldChatMessages: ChatMessage[]) => {
       messages = [
         ...oldChatMessages,
         {
           role: "user",
           content: chatText,
+          mode: userMode
         },
       ];
       return [...messages];
@@ -313,31 +349,35 @@ function ChatBox() {
             role: "assistant",
             content: responseMessage,
             isUrl: true,
+            mode: 'image'
           },
         ]);
       }
     } else {
-      const chatResp = await fetch("api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    const chatResp = await fetch("api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: messages.filter(msg => msg.mode === 'chat').map((msg) => ({ role: msg.role, content: msg.content }))
+      }),
+    });
+    if (chatResp.ok) {
+      const chatData = await chatResp.json();
+      setChatText("");
+      console.log(chatData);
+      const responseMessage = chatData.choices[0]?.message;
+      setChatMessages((oldChatMessages) => [
+        ...oldChatMessages,
+        {
+          ...responseMessage,
+          mode: userMode
         },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: messages,
-        }),
-      });
-      if (chatResp.ok) {
-        const chatData = await chatResp.json();
-        setChatText("");
-        console.log(chatData);
-        const responseMessage = chatData.choices[0]?.message;
-        setChatMessages((oldChatMessages) => [
-          ...oldChatMessages,
-          responseMessage,
-        ]);
-      }
+      ]);
     }
+  }
   }
 
   return (
@@ -369,101 +409,18 @@ function ChatBox() {
                 }}
               />
             </div>
-            <div className="flex justify-between pt-2">
+            <div className="flex justify-between pt-2 flex-wrap">
               <div className="flex items-center space-x-5">
                 <div className="flow-root">
                   <ReacordAduio setAudioText={setChatText}></ReacordAduio>
                 </div>
                 <div className="flow-root">
-                  <Listbox value={selected} onChange={setSelected}>
-                    {({ open }) => (
-                      <>
-                        <Listbox.Label className="sr-only">
-                          {" "}
-                          Your mood{" "}
-                        </Listbox.Label>
-                        <div className="relative">
-                          <Listbox.Button className="relative -m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500">
-                            <span className="flex items-center justify-center">
-                              {selected.value === null ? (
-                                <span>
-                                  <FaceSmileIconOutline
-                                    className="h-6 w-6 flex-shrink-0"
-                                    aria-hidden="true"
-                                  />
-                                  <span className="sr-only">
-                                    {" "}
-                                    Add your mood{" "}
-                                  </span>
-                                </span>
-                              ) : (
-                                <span>
-                                  <span
-                                    className={classNames(
-                                      selected.bgColor,
-                                      "flex h-8 w-8 items-center justify-center rounded-full"
-                                    )}
-                                  >
-                                    <selected.icon
-                                      className="h-5 w-5 flex-shrink-0 text-white"
-                                      aria-hidden="true"
-                                    />
-                                  </span>
-                                  <span className="sr-only">
-                                    {selected.name}
-                                  </span>
-                                </span>
-                              )}
-                            </span>
-                          </Listbox.Button>
-
-                          <Transition
-                            show={open}
-                            as={Fragment}
-                            leave="transition ease-in duration-100"
-                            leaveFrom="opacity-100"
-                            leaveTo="opacity-0"
-                          >
-                            <Listbox.Options className="absolute z-10 -ml-6 w-60 rounded-lg bg-white py-3 text-base shadow ring-1 ring-black ring-opacity-5 focus:outline-none sm:ml-auto sm:w-64 sm:text-sm">
-                              {moods.map((mood) => (
-                                <Listbox.Option
-                                  key={mood.value}
-                                  className={({ active }) =>
-                                    classNames(
-                                      active ? "bg-gray-100" : "bg-white",
-                                      "relative cursor-default select-none py-2 px-3"
-                                    )
-                                  }
-                                  value={mood}
-                                >
-                                  <div className="flex items-center">
-                                    <div
-                                      className={classNames(
-                                        mood.bgColor,
-                                        "flex h-8 w-8 items-center justify-center rounded-full"
-                                      )}
-                                    >
-                                      <mood.icon
-                                        className={classNames(
-                                          mood.iconColor,
-                                          "h-5 w-5 flex-shrink-0"
-                                        )}
-                                        aria-hidden="true"
-                                      />
-                                    </div>
-                                    <span className="ml-3 block truncate font-medium">
-                                      {mood.name}
-                                    </span>
-                                  </div>
-                                </Listbox.Option>
-                              ))}
-                            </Listbox.Options>
-                          </Transition>
-                        </div>
-                      </>
-                    )}
-                  </Listbox>
+                  <EditUserText chatText={chatText} setChatText={setChatText}></EditUserText>
                 </div>
+                <div className="flow-root">
+                <ModerationsText chatText={chatText} setChatText={setChatText}></ModerationsText>
+                </div>
+                
               </div>
               <div className="flex-shrink-0">
                 <button
@@ -479,6 +436,100 @@ function ChatBox() {
       </div>
     </>
   );
+}
+
+function ModerationsText(
+  {
+    chatText,
+    setChatText
+  }:{chatText: string,
+    setChatText:(text:string)=>void,
+  }
+){
+
+  async function moderationsText(){
+    if(!chatText) return;
+    const moderationsResp = await fetch("api/v1/moderations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "text-moderation-latest",
+        input: chatText,
+      }),
+    });
+    if (moderationsResp.ok) {
+      const moderationsData = await moderationsResp.json();
+      const flagged = moderationsData.results[0].flagged;
+      if(flagged){
+       alert("your text is not allowed");
+      }
+
+    }
+  }
+
+  return (
+    <button
+    type="button"
+    className="-m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500"
+  onClick={moderationsText}
+  >
+    <NoSymbolIcon
+      className="h-6 w-6 text-yellow-500"
+      aria-hidden="true"
+    />
+    <span className="sr-only">moderations</span>
+  </button>
+  )
+}
+
+function EditUserText(
+  {
+    chatText,
+    setChatText
+  }:{chatText: string,
+    setChatText:(text:string)=>void,
+  }
+){
+
+  async function editText(){
+    if(!chatText) return;
+    const editsResp = await fetch("api/v1/edits", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "text-davinci-edit-001",
+        input: chatText,
+        instruction: 'Fix the spelling mistakes and grammar errors.',
+        n: 1,
+        temperature: 0.2
+      }),
+    });
+    if (editsResp.ok) {
+      const chatData = await editsResp.json();
+      const responseMessage = chatData.choices[0]?.text;
+      console.log(chatData);
+      setChatText(responseMessage);
+
+    }
+  }
+
+  return (
+    <button
+    type="button"
+    className="-m-2 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 hover:text-gray-500"
+  onClick={editText}
+  >
+    <PencilSquareIcon
+      className="h-6 w-6 text-red-500"
+      aria-hidden="true"
+    />
+    <span className="sr-only">Edit</span>
+  </button>
+  )
 }
 
 function Footer() {
@@ -598,7 +649,7 @@ function ReacordAduio({
         </button>
       )}
       {audioUrl ? (
-        <div className="audio-player flex h-10">
+        <div className="flex h-10 w-[150px]">
           <audio src={audioUrl} className="h-10" controls></audio>
           <button
             type="button"
