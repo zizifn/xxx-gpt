@@ -236,7 +236,19 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
   const chatMessages = useAtomValue(chatMessagesAtom);
   const [selected, setSelected] = useState(moods[4]);
   const [chatText, setChatText] = useState("");
+  const [placeholder, setPlaceholder] = useState("彦祖请说话！");
   const [userMode, setUserMode] = useState<UserMode>("chat");
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if(Math.random() > 0.5) {
+        setPlaceholder("彦祖请说话！！")
+      }else{
+        setPlaceholder("亦菲小姐姐，吃饭了吗？")
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function sendChat(event: FormEvent) {
     if (!chatText) return;
@@ -419,7 +431,7 @@ function ChatBox({ editImgesIndex }: { editImgesIndex: number }) {
                 name="comment"
                 id="comment"
                 className="block w-full resize-none border-0 border-b border-transparent p-0 pb-2 text-gray-900 placeholder:text-gray-400 focus:border-indigo-600 focus:ring-0 sm:text-sm sm:leading-6"
-                placeholder="彦祖请说话..."
+                placeholder={placeholder}
                 value={chatText}
                 onKeyDown={onEnterPress}
                 onChange={(e) => {
