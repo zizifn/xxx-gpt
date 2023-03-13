@@ -62,7 +62,7 @@ export function Chats() {
     getScrollElement: () => parentRef.current,
     estimateSize: () => 45
   });
-  virtualizer.scrollToIndex(count - 1, "end")
+  virtualizer.scrollToIndex(count - 1);
   const items = virtualizer.getVirtualItems();
   return (
     <div className="flex w-4/5 min-w-fit flex-grow flex-col">
